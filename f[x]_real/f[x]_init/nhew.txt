@@ -1,0 +1,225 @@
+now we move on to this document on timing - what relevance has it for us and what can we take away?
+Threads, processes, RTOS? No.
+
+Just one or two interrupts and main().
+
+Highest priority: DSP
+A high-priority ISR tied to the DAC/Codec's DMA is responsible for processing audio (see life of an audio buffer). In that ISR, CVs and Gate inputs are also read, once per block of audio samples. The "control rate" is thus defined by the buffer size. It is typically 1, 2 or 4kHz.
+
+Processing audio samples in block has several advantages:
+
+Sometimes there are samples which are more complex to compute than others - for example you're resetting an envelope or handling a discontinuity, or you're hitting wavetable data which is not in cache. By processing samples in a block, the timing constraint is on the total time needed to process the block, not on the time needed to process a single sample.
+The code processing several samples at a time is way more efficient than code processing one sample at a time - because you can keep all your state variables / phase counter in registers while the loop takes place. You also save the cost of pushing/saving all your registers on the stack - which will happen all the time with an ISR.
+Lower priority: UI Polling (optional)
+A lower priority handler polls the switches and refreshes the LEDs. When a button press is detected, an event is shoved in a FIFO.
+
+In terms of code organization, Ui::Poll() contains all the code that is called on a regular basis to scan the state of buttons, encoders (and sometimes pots) and transmit information to the LEDs and displays.
+
+Who calls Ui::Poll()? Either the interrupt handler for a 1kHz timer, called SysTick_Handler(), and defined in the main module file (for example, check rings.cc). This low level timer is a facility offered by all ARM CPUs - and is often used by RTOS for context switching. Or the caller of Ui::Poll() is the interrupt handler that is invoked whenever a buffer of samples is ready to written to/read from the codec. That is the case in warps.cc, check its FillBuffer routine.
+
+In any case, since it is called 1000 times a second, it shouldn't attempt to do anything that takes more than 1ms. Otherwise... stack overflow (if it always takes more than its allotted time) or audio glitches (if it occasionally takes more than expected)!
+
+So whenever we detect a button press in Ui::Poll(), we just shove an event in a message queue (the Event object stores everything we need to know: what kind of control? which control? for how long has it been pressed?) and we just get out. We don't attempt to do the actual thing the button press should do (like changing the state of the module, saving things, sending a SysEx over MIDI...), because it might actually take more than 1ms to do this thing!
+
+Actual handling of UI actions
+At the lowest level of priority, the main() loop checks the FIFO for events, and handle them.
+
+Practically, whenever the processor is done with FillBuffer() (which contains the bulk of the audio processing code), and more generally whenever there is no interrupt to service, it returns back in the main loop.
+
+One can think of this loop as what the CPU is left to do whenever all the higher priority stuff is done (LED blinking? buttons checked? codec fed with audio? now let's check for UI stuff to do!). This is in this loop that we call ui.DoEvents(). It checks for unread messages in the event loop, and call the required methods to handle button presses or other types of events. With this organization of the execution time, the code handling the button presses is free to take as long as it needs: if necessary, it might be interrupted multiple times whenever something more useful needs to be done (like feeding audio to the codec).
+
+Debate: polling vs interrupts for UI stuff
+This code organization is not the only possible approach. For example, it is possible to ask the MCU to trigger an interrupt whenever there's a change on the voltage at the pin hooked to the button. So we don't have to check the state of the button continuously - we only get a notification when its state changes. Sounds cool, why am I not using that?
+
+Easy debouncing. My preferred debouncing technique (shove the read bits in a shift register, wait for a full string of 0s or 1s to decide that the button has reached a stable state) works better when the button is read continuously. Debouncing in ISRs... you need to start measuring intervals between calls to the ISR...
+Habit from desktop synth projects with many buttons, in which the buttons are all read by shift registers. In this case case the state of all buttons is streamed bit by bit to a single CPU pin, and a voltage change at this pin doesn't mean anything about the state of a specific button.
+There are sometimes limitations on the number of interrupts one can subscribe to, or on the MCU pins that can receive interrupts. Not relying on interrupts gives me more freedom for deciding which signal is connected to what. Since buttons are not critical traces (low speed signals, no special function required), they tend to be assigned to whatever pins are left after all the important peripherals are hooked to the processor.
+When stuff happens in too many interrupt handlers, it gets hard to troubleshoot audio glitches/unregistered button presses. On all my modules, I can assume that Ui::Poll() runs in constant time and uses about 0.2% of the CPU. Then the only thing I have to check for is that FillBuffer() runs in less than 99% of its allotted time, and we're left with a tiny bit of CPU for Ui::DoEvents(). You can often find something called PROFILE_INTERRUPT in my projects. When enabled, this toggles a processor pin at the beginning of FillBuffer() and at its end. I can monitor this pin with my scope, the period of the waveform is the latency (buffer duration), and the pulse width gives me the CPU time consumed by the audio processing code. I can zoom on the falling edge and see if there are combinations of settings that increase the CPU use.?
+ChatGPT
+
+Thought for 29 seconds
+
+Certainly! The document you've provided discusses critical aspects of timing and task prioritization in the context of embedded systems for audio processing modules like those found in Eurorack synthesizers. It outlines how to structure your code to ensure efficient and reliable operation, particularly when handling real-time audio processing alongside user interface (UI) interactions.
+
+Let's break down the key points of the document, explain their relevance to your project, and highlight what you can take away to implement in your module design.
+
+Key Concepts from the Document
+1. Simplified Task Management
+No RTOS Needed: The design avoids using a Real-Time Operating System (RTOS) or threads. Instead, it relies on a simple structure with one or two interrupts and the main loop (main()).
+Benefits:
+Simplicity: Reduces complexity in code management.
+Deterministic Behavior: Easier to predict and manage timing for critical tasks.
+2. Prioritizing Tasks with Interrupts
+Highest Priority: DSP Processing
+High-Priority ISR:
+Tied to the DAC/Codec's DMA (Direct Memory Access).
+Responsible for audio processing and reading CVs and Gate inputs once per block of audio samples.
+Control Rate:
+Defined by the buffer size.
+Typically operates at 1 kHz, 2 kHz, or 4 kHz.
+Advantages of Block Processing
+Efficient Computation:
+State Variables in Registers: Processing samples in blocks allows you to keep variables in CPU registers, reducing memory access times.
+Reduced Overhead: Saves on the overhead of pushing and popping registers on and off the stack for each ISR call.
+Flexible Timing:
+Aggregate Timing Constraints: The timing requirement is on the total time to process a block, not on individual samples.
+Handling Complex Computations: Allows for samples that require more computation time without affecting the overall timing.
+3. Lower Priority: UI Polling
+UI Handling:
+A lower-priority interrupt handler polls the switches and refreshes LEDs.
+When a button press is detected, an event is added to a FIFO (First-In, First-Out) queue.
+Function Ui::Poll():
+Contains code to scan buttons, encoders, and pots, and update LEDs and displays.
+Should be non-blocking and complete quickly to avoid interfering with higher-priority tasks.
+Invocation of Ui::Poll()
+Possible Callers:
+SysTick_Handler(): A 1 kHz timer interrupt handler provided by ARM CPUs, often used for RTOS context switching.
+Audio Buffer ISR: Called from the interrupt handler that processes audio buffers (e.g., FillBuffer() in warps.cc).
+4. Deferring UI Event Handling
+Event Queue:
+Button presses and other UI events are added to an event queue during polling.
+Main Loop Processing:
+The main loop (main()) checks the event queue and handles events when no interrupts are pending.
+Allows UI event handling to take as much time as needed without disrupting critical tasks.
+5. Polling vs. Interrupts for UI
+Reasons for Polling UI Inputs
+Debouncing Ease:
+Polling allows for simpler and more reliable debouncing algorithms.
+Hardware Limitations:
+Some MCUs have limitations on the number of interrupt-capable pins.
+Polling provides flexibility in pin assignments.
+Debugging Simplicity:
+Fewer interrupts make it easier to debug timing issues and audio glitches.
+6. Performance Monitoring
+Profiling Tools:
+Use of a PROFILE_INTERRUPT feature to toggle a processor pin at the start and end of critical functions (e.g., FillBuffer()).
+Allows you to monitor CPU usage and timing with an oscilloscope.
+Relevance to Your Project
+1. Task Prioritization and Timing
+Implement High-Priority Audio Processing
+Use a High-Priority ISR:
+Tie your audio processing to an ISR triggered by the DAC/Codec's DMA.
+Ensure that audio processing and CV/Gate reading happen at the highest priority.
+Process Audio in Blocks:
+Buffer Size:
+Choose an appropriate buffer size (e.g., 32, 64, 128 samples) to balance latency and processing time.
+Control Rate:
+Your control rate will be determined by how often the ISR is called (e.g., 1 kHz for a 1 ms buffer at 48 kHz sample rate).
+Benefits for Your Module
+Efficient CPU Usage:
+Minimizes CPU overhead by reducing the number of ISR calls.
+Predictable Timing:
+Ensures that critical audio tasks meet their real-time requirements.
+2. UI Handling with Polling
+Implement Low-Priority UI Polling
+Poll UI Elements:
+Use a lower-priority interrupt (e.g., SysTick at 1 kHz) to poll buttons, encoders, and LEDs.
+Event Queue:
+When a UI action is detected, enqueue an event rather than processing it immediately.
+Non-Blocking:
+Keep Ui::Poll() execution time short (well under 1 ms) to avoid interfering with higher-priority tasks.
+Advantages
+Simplified Debouncing:
+Implement debouncing algorithms that work well with continuous polling.
+Flexibility in Hardware Design:
+Assign UI inputs to any available GPIO pins without worrying about interrupt capabilities.
+Easier Debugging:
+Fewer ISRs make it simpler to identify and fix timing-related issues.
+3. Event Handling in Main Loop
+Process UI Events in main()
+Check Event Queue:
+In your main loop, regularly check for and process events from the UI.
+Non-Time-Critical Processing:
+Since the main loop runs when no interrupts are pending, UI event handling can take longer without affecting audio processing.
+Benefits
+Avoids Audio Glitches:
+Prevents UI processing from causing delays in audio processing.
+Simplifies Code Structure:
+Separates time-critical code (ISRs) from non-critical code (main loop), making your program easier to understand and maintain.
+4. Polling vs. Interrupts for UI Inputs
+Why Polling May Be Preferable
+Debouncing:
+Polling simplifies the implementation of debouncing logic, improving reliability.
+Hardware Constraints:
+Allows you to use any available GPIO pins for UI inputs, not limited to interrupt-capable pins.
+Resource Management:
+Reduces the number of ISRs, freeing up resources and simplifying interrupt handling.
+Implementation Tips
+Use Shift Registers:
+For handling multiple buttons or LEDs, consider using shift registers to reduce the number of GPIO pins needed.
+Consistent Polling Rate:
+Maintain a consistent polling rate (e.g., 1 kHz) to ensure responsive UI interaction.
+5. Monitoring and Profiling Performance
+Implement Profiling Tools
+Toggle Debug Pins:
+Use GPIO pins to indicate the start and end of critical functions (e.g., audio processing ISR).
+Use an Oscilloscope:
+Measure the pulse width on the debug pins to determine CPU usage and identify bottlenecks.
+Benefits
+Optimize CPU Usage:
+Ensure that your audio processing code does not exceed the allotted time.
+Detect Performance Issues:
+Identify settings or conditions that cause increased CPU load.
+Key Takeaways for Your Module Design
+Prioritize Critical Tasks:
+Use interrupts judiciously to ensure that time-critical tasks like audio processing have the highest priority.
+Process Audio in Blocks:
+Batch processing improves efficiency and eases timing constraints.
+Implement Non-Blocking UI Polling:
+Poll UI elements at a lower priority and defer processing to the main loop.
+Use Event Queues for UI Actions:
+Decouple UI detection from processing to prevent interference with real-time tasks.
+Prefer Polling Over Interrupts for UI:
+Simplifies debouncing and hardware design, and reduces ISR overhead.
+Monitor Performance:
+Implement profiling mechanisms to measure and optimize CPU usage.
+Practical Steps to Implement These Concepts
+1. Set Up Your Interrupts
+High-Priority ISR for Audio Processing:
+
+Configure your DMA to trigger an ISR when a block of audio samples is ready.
+Ensure this ISR has the highest priority in your system.
+Lower-Priority ISR for UI Polling:
+
+Use a timer (e.g., SysTick) to trigger Ui::Poll() at a consistent rate (e.g., 1 kHz).
+Set this ISR to a lower priority than your audio processing ISR.
+2. Design Your Main Loop
+Event Handling:
+In your main() function, continuously check for events in the UI event queue and process them.
+Keep the main loop efficient but allow for longer processing times compared to ISRs.
+3. Implement Efficient Debouncing
+Shift Register Method:
+Read button states and shift them into a register.
+Confirm a button state change only after a consistent sequence of readings.
+4. Optimize Your Code
+Avoid Blocking Calls in ISRs:
+
+Keep ISRs short and efficient.
+Do not perform lengthy computations or blocking operations in ISRs.
+Use Efficient Data Structures:
+
+Implement FIFO queues for event handling using circular buffers or ring buffers for efficiency.
+5. Utilize Profiling Tools
+Implement Debug Pins:
+
+Use GPIO pins to indicate processing times of critical functions.
+Monitor these pins with an oscilloscope to visualize CPU usage.
+Measure and Adjust:
+
+Regularly profile your system under different conditions.
+Optimize code paths that consume excessive CPU time.
+6. Test Thoroughly
+Audio Quality:
+Test for audio glitches or artifacts that may result from timing issues.
+UI Responsiveness:
+Ensure that the UI remains responsive, and button presses are registered accurately.
+Stress Testing:
+Simulate worst-case scenarios to verify that your system maintains real-time performance.
+Conclusion
+The document you've provided offers valuable insights into structuring your embedded software for a Eurorack module. By adopting these strategies, you can:
+
+Ensure Real-Time Audio Processing: Maintain high-priority, efficient audio processing that meets real-time constraints.
+Achieve Responsive UI Interaction: Provide a responsive user interface without compromising critical tasks.
+Simplify Debugging and Maintenance: Keep your code organized, making it easier to debug and maintain over time.
+Optimize Resource Utilization: Balance CPU usage between audio processing and other tasks, maximizing the performance of your module.
+Feel free to ask if you have any questions or need further clarification on implementing these concepts in your project! I'm here to help you apply these principles effectively to your module design.

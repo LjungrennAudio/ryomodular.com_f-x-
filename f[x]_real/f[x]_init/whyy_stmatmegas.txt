@@ -1,0 +1,231 @@
+here's some more info, fren:
+History time: why STM32 chips?
+Why not DSPs?
+DSPs require proprietary, often expensive, development tools running on Windows.
+DSPs often require external memory chips.
+DSPs often come in large packages.
+The code written for DSPs is not portable and is often write only. The development cycle (prototype in a higher level language, then port to assembly, then it's over) is not my preferred way of working because I like revising ideas, and running the code on my development machine to experiment with it rather than on the embedded target. Think of it: VCV Rack wouldn't have been possible if Rings ran DSP code.
+Why ARM MCUs?
+There are open source development tools like openOCD and gcc. The fact that ARM is the most popular platform for smartphones and IoT devices means that there is a large community, including employees from large companies, maintaining and improving gcc for the ARM target, and that the generated code and the optimizations are good.
+
+Why STM32?
+At the time I got into it in 2012, there were two choices: STM32F and NXP LPC (I'm not even sure Freescale Kinetis was available, but if it was it wasn't very visible). STM32 had better support from the open source tools, and more importantly the embedded systems class at my alma mater used them. I could get access to their course material, so that's what I went with.
+
+In a nutshell, it could be summarized by the fact that I come from a software development background using UNIX command line tools, and that I wanted to keep a similar workflow when developing my modules. If I had come from an embedded systems or more generally EE background, I wouldn't have shied away from a proprietary IDE running on Windows and might have gone for something else.
+
+Another large DIY project, MIDIBox, was mostly STM32F at the time; and with the popularity of Mutable Instruments and the availability of the schematics, code and makefiles, I suspect this might have influenced many aspiring developers to get into this platform in the following years.
+
+Which MCUs?
+There are three "classes" in terms of CPU use, and Peaks and Plaits are in the same:
+
+Heavy: Beads (STM32H7, 480 MHz)
+Medium: Rings, Warps, Clouds, Elements, Marbles (STM32F405, 168 MHz)
+Light: Peaks, Yarns, Tides, Frames (STM32F10x, 72 MHz, integer math), Plaits, Stages, Tides 2018 (STM32F37x, 72 MHz, floating point math)
+Pretty much all modules are designed to use 80 to 95% of the available computing power on the chip. I tweak the sample rate and/or adjust the complexity of the code (order of interpolations, number of voices, that kind of things...) to reach that goal.
+
+In 2021 I would have probably used the STM32G4 line for all modules other than Beads! But then there is... chronology. When I designed Rings in 2015, I had no idea a better choice of MCU would come 4 years later (and if I knew about it, would I have waited for it to be available)?
+
+There was no other choice than the F4 at that time. But how awful the ADCs are on that MCU! You need a lot of post-processing to get a stable and accurate reading.
+
+Then ST launched the F37x line. This was an interesting proposition: you get less CPU power than the F4, but excellent ADCs. The F37x looked like the perfect choice to upgrade modules which were not inherently CPU hungry: Braids (-> Plaits), Peaks (-> Stages), and Tides.
+
+With the G4 line, there is no longer any compromise to do on CPU vs ADC precision. And given that they are available in 48 pin packages, they are suitable for small modules (like Plaits).
+
+FLASH layout and bootloader
+The bootloader is compiled and linked with a linkerscript that places the interrupt vector and code at 0x08000000 (beginning of flash).
+
+The application code is compiled and linked with a different linkerscript that places the interrupt vector and code at 0x08004000 (16k after the beginning of the flash)
+
+Both blocks of code are converted to .hex files and merged together in a single .hex file - so effectively the first 16k of flash contains the bootloader, and the rest the application code.
+
+When the module is powered on, the processor boots with the interrupt vector and code at 0x08000000, so it starts running the bootloader code. It either stays there if the encoder is pressed; or it leaves the white (!exit_updater) loop. In which case, the processor is reset and the program counter is forced to address 0x08004000, so it jumps to the main application code. One of the very first things done in the application code is to set the interrupt vector table to 0x4000 - so that it doesn't use the interrupt table at the beginning of the flash.
+
+Why Plaits does not run at 48kHz exactly
+PLL setting: 9/47.
+
+Actual sample rate: 8000000 x 9/47 / 16 / 2 / 48000 = 47872.34 Hz
+
+Low-level pin access
+    // For F1, F3, G4
+    GPIOA->BSRR = GPIO_Pin_0; // Set Pin 0 of GPIOA high
+    GPIOA->BRR = GPIO_Pin_0; // Set Pin 0 of GPIOA low
+
+    // For F4
+    GPIOA->BSRRL = GPIO_Pin_0; // Set Pin 0 of GPIOA high
+    GPIOA->BSRRH = GPIO_Pin_0; // Set Pin 0 of GPIOA low
+
+    // For H7
+    GPIOA->BSRR = GPIO_Pin_0; // Set Pin 0 of GPIOA high
+    GPIOA->BSRR = GPIO_Pin_0 << 16U; // Set Pin 0 of GPIOA low
+Why no equivalent of avril for STM32?
+avril was Mutable Instruments' hardware abstraction library for the AVR family, heavily based on C++ templates.
+
+When I started programming on AVR, the two alternatives were either direct register writes (unreadable without the AVR datasheet) or the Arduino libraries (poorly designed, run-time abstractions with huge overhead for every call). I really felt the need for something that would allow me to write readable/reusable code... that could be compiled down to a single machine instruction. It was very important because I knew the projects I was working on were pushing the processor to its limits in terms of CPU use and code size. I also knew I would frequently have to do bit-banging.
+
+The need for a such a library was less pressing when I moved to STM32F. First, the "firmware library" from ST covered relatively well the need for an abstraction layer above raw register writes. It's not very efficient (overhead of function calls), but I don't need it to be very efficient because most I/O occurs at a low rate (usually 1kHz), and the stuff that occurs at a higher rate is usually controlled by the hardware (DMA, specialized peripherals...). Also, the chips are more generous in terms of flash size, so less efficient code is tolerated. And another thing I learnt from my AVR days: all projects have something unique on the hardware side that makes it a bit futile to write a reusable library above the GPIO level.
+
+There are still places where I use templates in the new projects, though!
+
+For example, Clouds' grain rendering algorithm is specialized for each combinations of channel #, audio quality, and sample interpolation method - removing as much tests and branching from the loop, and keeping the inside of the loop small enough for the compiler to unroll.
+
+Another example is the multimode filter used in Clouds and Elements, in which the filter type is a compile-time parameter.
+
+And Warps uses template-based polyphase FIR resamplers - the templates are used to unroll pretty much all the code at compile-time to make it very efficient.
+
+The idea is that if a function f(argument, parameter) is called for only a few values of the parameter known at run-time, it might help performance (at the expense of code size) to create for each used value of the parameter a f(argument) variant in which the parameter is a known constant, and everything depending on the parameter can be pre-computed and assumed constant too (including all branches depending on the parameter being straightened). In other words: split the arguments of the function between “data” arguments and “configuration” arguments, and partially evaluate the “configuration” arguments at compile-time.
+of help?
+ChatGPT
+
+Thought for 17 seconds
+
+Certainly! The information you've provided offers valuable insights into the selection and utilization of STM32 microcontrollers (MCUs) for modular synthesizer modules. This knowledge is highly relevant to your project, as it addresses critical considerations in choosing the right MCU, optimizing performance, and implementing efficient hardware and software designs for your Eurorack module.
+
+1. History and Rationale for Choosing STM32 Chips
+Why Not DSPs?
+Proprietary Tools: Digital Signal Processors (DSPs) often require expensive, proprietary development tools that run only on specific operating systems (e.g., Windows).
+External Components: DSPs may necessitate external memory chips, adding complexity and cost to the hardware design.
+Large Packages: DSPs typically come in larger physical packages, which may not be suitable for compact Eurorack modules.
+Code Portability: Code written for DSPs can be less portable and harder to maintain or modify, hindering iterative development and collaboration.
+Why ARM MCUs?
+Open-Source Tools: ARM MCUs benefit from open-source development tools like GNU Compiler Collection (GCC) and OpenOCD, facilitating cross-platform development.
+Community Support: A large community contributes to ARM toolchains, ensuring good optimization and code generation.
+Portability and Flexibility: ARM MCUs allow for writing code that's portable and maintainable, enabling easier prototyping and iterative development.
+Why STM32 Specifically?
+Toolchain Support: At the time of initial selection (around 2012), STM32 MCUs had better support from open-source tools compared to alternatives like NXP LPC series.
+Familiarity: The developer had access to course materials and resources that used STM32, making it a more accessible choice.
+Community Adoption: Projects like MIDIbox and Mutable Instruments' own modules used STM32, creating a foundation of knowledge and resources to build upon.
+2. Selecting the Right MCU for Your Module
+Classes of STM32 MCUs Used in Modules
+Heavy Processing Needs:
+Beads: Uses STM32H7 (480 MHz) for intensive processing tasks.
+Medium Processing Needs:
+Rings, Warps, Clouds, Elements, Marbles: Use STM32F405 (168 MHz).
+Light Processing Needs:
+Peaks, Yarns, Tides, Frames: Use STM32F10x (72 MHz, integer math).
+Plaits, Stages, Tides 2018: Use STM32F37x (72 MHz, with floating-point unit).
+Design Philosophy
+Optimal Utilization: Modules are designed to use 80% to 95% of the available CPU power to maximize performance without unnecessary overhead.
+Balancing CPU and ADC Precision:
+Earlier MCUs like the STM32F4 provided higher CPU speeds but had poorer ADC performance, requiring software filtering to stabilize readings.
+The STM32F37x series offered better ADCs but less processing power, suitable for modules with lower computational demands.
+Modern Choice: STM32G4 Series
+Improved Performance: Combines high CPU speeds with accurate ADCs, reducing the need to compromise between processing power and peripheral quality.
+Package Size: Available in 48-pin packages, making them suitable for small, space-constrained modules like those in Eurorack format.
+Recommendation: For new designs, consider the STM32G4 series to leverage modern features and improved capabilities.
+3. Flash Layout and Bootloader Implementation
+Flash Memory Organization
+Bootloader Location: Placed at the beginning of the flash memory (address 0x08000000).
+Application Code Location: Placed after the bootloader, offset by 16 KB (address 0x08004000).
+Boot-Up Sequence
+Power-On: The MCU starts executing code from the bootloader at the flash's base address.
+Bootloader Functionality:
+Checks for specific conditions (e.g., a button press) to decide whether to stay in bootloader mode (for firmware updates) or proceed.
+Transition to Application:
+If not updating, the bootloader resets the processor and sets the program counter to the application code's starting address.
+The application code sets the Interrupt Vector Table to point to its own interrupt handlers.
+Importance for Your Module
+Firmware Updates: A well-designed bootloader allows for safe and reliable firmware updates without external programming tools.
+Stability: Separating the bootloader and application code enhances stability and security.
+4. Sample Rate Considerations
+Example: Plaits' Sample Rate
+PLL Settings: Plaits uses a Phase-Locked Loop (PLL) configuration with settings 9/47.
+Actual Sample Rate: Due to PLL settings and clock dividers, the sample rate is approximately 47,872.34 Hz instead of exactly 48 kHz.
+Implications:
+The slight deviation is usually imperceptible in audio applications.
+Precise sample rates may require careful clock configuration, affecting MCU settings and peripheral timings.
+Considerations for Your Module
+Clock Configuration: Ensure that the MCU's clock tree is configured to provide the desired sample rates for audio processing.
+Peripheral Timings: Be aware that changing clock settings can affect other peripherals (e.g., timers, communication interfaces).
+5. Low-Level Pin Access and Hardware Abstraction
+Direct GPIO Access
+Access Methods Vary by MCU Family:
+STM32F1, F3, G4:
+cpp
+Copy code
+GPIOA->BSRR = GPIO_Pin_0; // Set Pin 0 high
+GPIOA->BRR = GPIO_Pin_0;  // Set Pin 0 low
+STM32F4:
+cpp
+Copy code
+GPIOA->BSRRL = GPIO_Pin_0; // Set Pin 0 high
+GPIOA->BSRRH = GPIO_Pin_0; // Set Pin 0 low
+STM32H7:
+cpp
+Copy code
+GPIOA->BSRR = GPIO_Pin_0;         // Set Pin 0 high
+GPIOA->BSRR = GPIO_Pin_0 << 16U;  // Set Pin 0 low
+Why No Equivalent of 'avril' for STM32
+'avril' Library: A hardware abstraction layer for AVR microcontrollers using C++ templates to achieve efficient, readable code.
+Less Need on STM32:
+STM32 Standard Peripheral Library (SPL): Provides a higher-level abstraction over direct register manipulation.
+Performance Considerations: STM32 MCUs have more processing power and memory, making the overhead of SPL acceptable.
+Unique Hardware Designs:
+Modules often have unique hardware configurations, reducing the benefit of a generalized abstraction layer above the GPIO level.
+Implications for Your Project
+Use of SPL or HAL:
+Leverage the Hardware Abstraction Layer (HAL) or Low-Layer (LL) libraries provided by ST for GPIO and peripheral management.
+Direct Register Access:
+For performance-critical sections, you may still use direct register manipulation.
+Code Readability and Maintainability:
+Balance the need for efficiency with code clarity, especially if others may collaborate on your project.
+6. Use of Templates and Code Optimization
+Templates for Performance
+Compile-Time Specialization:
+Functions are specialized at compile time for specific parameters, reducing runtime overhead.
+Examples in Modules:
+Clouds: Grain rendering algorithm specialized for combinations of channel count, audio quality, and interpolation method.
+Elements and Clouds: Multimode filter type determined at compile time.
+Warps: Template-based polyphase FIR resamplers for efficient sample rate conversion.
+Benefits
+Performance Gains:
+Eliminates conditional branches and runtime parameter checks inside tight loops.
+Allows the compiler to optimize and unroll loops effectively.
+Maintainability:
+Code remains modular and readable while achieving high performance.
+Applying This to Your Module
+Identify Critical Sections:
+Focus on parts of your code where performance is crucial (e.g., audio processing loops).
+Use Templates Wisely:
+Employ templates to specialize functions based on fixed parameters or configurations.
+Monitor Code Size:
+Be aware that extensive use of templates can increase code size due to multiple instantiations.
+Relevance to Your Project
+Choosing the Right MCU
+Assess Processing Needs:
+Determine the computational demands of your module based on the complexity of the mathematical functions and audio processing tasks.
+Consider STM32G4 Series:
+Offers a balance of processing power, accurate ADCs, and suitable package sizes.
+Plan for Peripheral Requirements:
+Ensure the MCU has sufficient ADC channels, SPI/I²S interfaces, and GPIOs for your design.
+Optimizing Code and Performance
+Efficient Code Practices:
+Use templates and compile-time optimizations for performance-critical code.
+Keep inner loops tight and minimize branching within them.
+Utilize Hardware Features:
+Leverage DMA for data transfers to reduce CPU load.
+Use hardware peripherals for tasks like filtering or signal generation when possible.
+Bootloader and Firmware Updates
+Implement a Robust Bootloader:
+Allows for firmware updates without additional hardware.
+Enhances the longevity and flexibility of your module.
+Memory Management:
+Plan your flash memory layout to accommodate bootloader and application code.
+Clock Configuration and Sample Rates
+Precision vs. Practicality:
+Decide whether exact sample rates are necessary for your application.
+Configure PLL and clock dividers accordingly, keeping in mind the impact on peripherals.
+Hardware Abstraction
+Use Provided Libraries:
+Start with ST's HAL or LL libraries for peripheral management.
+Move to direct register access in performance-critical areas if needed.
+Maintain Readability:
+Write code that's easy to understand and maintain, balancing abstraction and efficiency.
+Conclusion
+The insights you've shared are indeed helpful and directly applicable to your project. By understanding the rationale behind the selection of STM32 MCUs and the techniques used in existing modules, you can make informed decisions in your module design. Key takeaways include:
+
+Selecting an MCU that balances processing power, peripheral capabilities, and package size.
+Optimizing your code using templates and compile-time specialization to enhance performance without sacrificing maintainability.
+Implementing efficient hardware designs, leveraging DMA and hardware peripherals to offload tasks from the CPU.
+Planning for firmware updates by incorporating a bootloader and thoughtful flash memory layout.
+Managing clock configurations to meet your application's timing requirements.
+Feel free to reach out if you have any questions or need further assistance with specific aspects of your module design! I'm here to help you navigate these decisions and ensure your project is successful.

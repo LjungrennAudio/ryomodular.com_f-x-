@@ -1,0 +1,551 @@
+what other functions are used for similar purposes in synthesis fren?
+ChatGPT said:
+ChatGPT
+Great question, fren! In synthesis, non-linear functions are often used to shape waveforms, add distortion, create harmonics, or emulate analog behaviors. Similar to tanh, there are several other mathematical functions that can be used in waveshaping, soft clipping, and distortion. Here’s a breakdown of other commonly used functions and how they are applied in synthesis:
+
+1. Sigmoid Function
+The sigmoid function is closely related to tanh and is often used for soft clipping or smooth distortion.
+Formula:
+sigmoid(𝑥)=1+𝑒^−𝑥
+
+sigmoid(x)=1+e^−x
+​
+ 
+Usage in Synthesis:
+The sigmoid function is similar to tanh, but its output is constrained between 0 and 1 rather than -1 and 1. This makes it useful for soft clipping where you want to limit the output to positive values (e.g., creating smooth transitions between 0 and a maximum amplitude).
+It’s also used in envelope shaping, where smooth transitions between values are needed.
+Example: Using the sigmoid function to soft clip an audio signal, adding a controlled distortion that avoids harsh clipping.
+
+2. Rectified Linear Unit (ReLU)
+ReLU is a simple non-linear function that returns the input if it’s positive and 0 if it’s negative.
+Formula:
+ReLU(𝑥)=max(0,𝑥)
+
+ReLU(x)=max(0,x)
+
+
+Usage in Synthesis:
+ReLU can be used for waveshaping, where you want to modify the waveform by rectifying the negative parts of the signal. This produces a different kind of harmonic distortion, as it eliminates negative amplitudes and effectively doubles the frequency of the input signal.
+It’s also useful in distortion circuits to create clipping or saturation effects by rectifying part of the signal.
+Example: Applying ReLU to a sine wave to create a signal with harmonics that only uses positive values, giving it a sharp, clipped sound.
+
+3. Absolute Value Function (|x|)
+The absolute value function is a simple way to rectify a signal, flipping any negative values to positive.
+Formula:
+𝑓(𝑥)=∣𝑥∣
+
+f(x)=|x|
+
+
+Usage in Synthesis:
+In waveshaping, the absolute value function creates full-wave rectification, which can add even harmonics to the signal. This creates a brighter and more harmonically rich sound.
+It’s often used in distortion circuits to add harmonic content by folding the negative side of the waveform back onto the positive side.
+Example: Using the absolute value function to turn a triangle wave into a waveform with a more complex harmonic structure.
+
+4. Softsign Function
+The softsign function is another smooth non-linearity that behaves similarly to tanh, but with a slower saturation curve.
+Formula:
+softsign(𝑥)=𝑥1+∣𝑥∣
+
+softsign(x)=x1+∣x∣
+​
+ 
+Usage in Synthesis:
+The softsign function is used for waveshaping and soft clipping, providing smoother transitions between the input and output compared to hard clipping.
+It can be used in situations where you want a less aggressive form of clipping than tanh, making the output sound more subtle and less distorted.
+Example: Applying softsign to a sine wave to gently add harmonics while keeping the original tone's integrity.
+
+5. Polynomial Waveshaping
+Polynomial functions are widely used for waveshaping because they offer flexibility in creating specific harmonic content.
+Formula:
+𝑓(𝑥)=𝑎0+𝑎1𝑥+𝑎2𝑥2+𝑎3𝑥3+⋯
+
+f(x)=a0​+a1x+a2x2+3x3+⋯
+
+
+Usage in Synthesis:
+Polynomial waveshaping allows you to design a function that produces a desired harmonic structure. For example, using higher-order polynomials (like cubic or quintic) can introduce complex harmonics.
+By adjusting the polynomial coefficients, you can control how the waveform is shaped and what kinds of harmonics are produced.
+Example: Using a cubic polynomial to add odd harmonics to a basic waveform like a sine or triangle wave, making it sound more like a distorted or "fuzz" signal.
+
+6. Exponential Function
+The exponential function is another type of non-linear transformation that can be used to shape sound in interesting ways.
+Formula:
+𝑓(𝑥)=𝑒𝑥
+
+f(x)=ex
+
+ 
+Usage in Synthesis:
+In envelope generation, exponential curves are often used to model attack and decay stages that more naturally mimic real-world instrument behaviors.
+Exponential functions can also be used to create sharp waveshaping effects, emphasizing certain frequencies and creating a strong harmonic profile.
+Example: Using an exponential function to create sharper, more percussive attack transients in a synthesizer’s envelope generator.
+
+7. Hyperbolic Sine and Cosine (sinh and cosh)
+The hyperbolic sine (sinh) and cosine (cosh) functions are non-linear functions similar to their circular counterparts but are often used in saturation and distortion effects.
+Formulas:
+sinh(𝑥)=𝑒𝑥−𝑒−𝑥2
+
+
+sinh(x)=ex−e−x2
+ 
+​
+ 
+cosh(𝑥)=𝑒𝑥+𝑒−𝑥2
+
+cosh(x)=ex+e−x2
+ 
+​
+
+Usage in Synthesis:
+These functions can be used to produce non-linear responses in distortion units or waveshapers, generating harmonics in ways similar to tanh but with a slightly different character.
+sinh adds sharp overtones and distortion, while cosh smooths and expands the signal.
+Example: Using sinh to add strong harmonics to a clean signal, making it sound more aggressive or saturated.
+
+8. Arc-Tangent (atan)
+The arc-tangent function (often shortened to atan) is another soft-clipping function used in waveshaping.
+Formula:
+atan(𝑥)=arctan(𝑥)
+
+atan(x)=arctan(x)
+
+
+Usage in Synthesis:
+atan is useful for creating a gentle soft-clipping effect, similar to tanh, but with a slightly more gradual saturation curve.
+It’s particularly good for distortion units where you want to avoid harsh clipping and prefer a smoother, more natural overdrive.
+Example: Using atan in a guitar amplifier simulation to produce a warm, natural-sounding distortion without sharp edges.
+
+9. Hard Clipping
+Hard clipping is the simplest form of distortion, where values outside a certain threshold are abruptly limited.
+Formula:
+𝑓(𝑥) = {if 𝑥 < −1, -1
+       {if −1 ≤ 𝑥 ≤ 1, x
+       {if 𝑥 > 1, 1
+
+f(x) = {if x < −1, -1
+       {if −1 ≤ x ≤ 1, x
+       {if x > 1, 1
+​
+ 
+Usage in Synthesis:
+Hard clipping is used to create aggressive distortion, particularly in fuzz or overdrive effects. It adds both odd and even harmonics, resulting in a highly distorted sound.
+While effective in creating loud, edgy sounds, hard clipping can introduce aliasing and other unwanted digital artifacts if not handled properly.
+Example: Applying hard clipping to a signal in a distortion pedal emulation to create a gritty, compressed tone.
+
+10. Wavefolding
+Wavefolding is a non-linear process where a waveform is "folded" back on itself after it exceeds a certain threshold.
+Usage in Synthesis:
+Wavefolding creates extremely rich harmonic content by adding sharp bends or "folds" in the waveform. This technique is often used in west coast synthesis (e.g., in Buchla-style synths).
+Unlike simple clipping, wavefolding can produce highly complex timbres and chaotic harmonic structures.
+Example: Using wavefolding on a simple sine wave to generate a harmonically dense, metallic-sounding waveform, typical in FM synthesis.
+
+Summary:
+Functions like sigmoid, ReLU, absolute value, softsign, polynomial waveshaping, and exponential are all used to shape waveforms in synthesis and signal processing. These functions introduce non-linearity, adding harmonic content, distortion, or soft clipping, which can make sounds more interesting and analog-like.
+
+Each function provides a different approach to shaping the sound, ranging from gentle soft clipping (atan, softsign) to aggressive distortion (hard clipping, wavefolding). Depending on
+
+
+
+
+
+
+You said:
+what other functions are used for similar purposes in synthesis fren?
+ChatGPT said:
+ChatGPT
+Great question, fren! In synthesis, there are several functions used to shape waveforms, introduce non-linearities, and manipulate signals in ways similar to how tanh is used. These functions help create distortion, waveshaping, dynamic control, and harmonic generation, all of which contribute to the richness of synthesized sounds. Here are some common functions and techniques used for similar purposes in synthesis:
+
+1. Sigmoid Functions
+Similar to tanh, sigmoid functions provide a soft transition from one state to another and are often used to introduce soft clipping and smooth non-linearities.
+
+Sigmoid function:
+sigmoid
+(
+𝑥
+)
+=
+1
+1
++
+𝑒
+−
+𝑥
+sigmoid(x)= 
+1+e 
+−x
+ 
+1
+​
+ 
+Purpose: This is another smooth, S-shaped function used in waveshaping and soft clipping. It's often used in a variety of fields including machine learning, but in synthesis, it works well for controlling signal transitions.
+Difference from tanh: While sigmoid outputs values between 0 and 1, tanh outputs between -1 and 1.
+Application: You can use a sigmoid function in a distortion effect to create a smoother, more gradual clipping than hard-clipping methods, similar to tanh, but with a different range.
+
+2. Hard Clipping
+Hard clipping is a simple function where any value outside a certain threshold is cut off abruptly, resulting in a sharp, distorted sound.
+
+Clipping function:
+
+clipped(𝑥)={if 𝑥 < −threshold, -threshold
+	   {if −threshold � 𝑥 ≤ threshold
+           {if 𝑥 > threshold, threshold
+	
+clipped(x)=⎩if x < −threshold, -threshold,
+	   ⎨if −threshold ≤ x ≤ threshold, x,
+	   ⎧if x > threshold, threshold,
+​
+   
+Purpose: Hard clipping is used to create aggressive distortion, often found in fuzz pedals, distortion effects, and certain synthesizer distortion circuits.
+
+Application: Hard clipping is common in rock and electronic music, where a very aggressive, harsh distortion is desired.
+
+3. Rectification (Half-wave and Full-wave)
+Rectification refers to processes that affect only the positive or negative parts of a waveform. This can introduce asymmetry in the signal, which generates harmonics.
+
+Half-wave rectification:
+
+𝑓(𝑥)={𝑥,if 𝑥 > 0
+      0,if 𝑥 ≤ 0
+
+f(x)={if x>0, x
+     {if x≤0, 0
+​
+ 
+Only the positive portion of the waveform is kept; the negative part is removed.
+Full-wave rectification:
+
+𝑓(𝑥)=∣𝑥∣
+
+f(x)=∣x∣
+
+
+Both positive and negative portions of the waveform are made positive.
+Purpose: Rectification is used in waveshaping to drastically alter the harmonic content of the signal. It emphasizes the even-order harmonics, making the sound richer and more complex.
+
+Application: This is commonly used in ring modulators, wavefolders, and distortion circuits to create unique harmonic textures.
+
+4. Wavefolding
+Wavefolding is a form of non-linear distortion where the waveform is "folded" back on itself when it exceeds a certain threshold, rather than being clipped.
+
+Wavefolding function (conceptually):
+
+𝑓(𝑥)={if ∣𝑥∣ < 𝑇, 𝑥
+     {if 𝑇 ≤ 𝑥 < 2𝑇, 2𝑇−𝑥
+     {…
+
+f(x)= ⎩if ∣x∣<T, x,
+      ⎧if T≤x<2T, 2T−x,
+​      ⎧ …
+​
+ 
+The waveform is reflected back upon itself, introducing more harmonics with each fold.
+Purpose: Wavefolding is used to create rich harmonic content from simple waveforms. It’s commonly found in West Coast-style synthesis (e.g., Buchla modular systems).
+
+Application: You might start with a basic sine wave and apply wavefolding to create a highly complex, harmonically rich waveform for basslines or lead sounds.
+
+5. Saturating Functions
+Saturation is a form of soft clipping that limits the signal more gently than hard clipping. It often results in a warm, analog-style distortion.
+
+Cubic Saturation is a common type:
+
+𝑓(𝑥)={for small values of 𝑥, 𝑥-3𝑥^3
+      for large values of 𝑥,  clipping at max value
+
+f(x)={for small values of x, x−3x^3, 
+     {for large values of x, clipping at max value
+​
+ 
+Small values are treated in a cubic form, creating a rounded response. For larger values, it limits the signal similarly to tanh.
+Purpose: Saturation is widely used in analog emulation, adding harmonics and making digital synths sound warmer and more natural.
+
+Application: Saturation is commonly used in tape emulators, analog synths, and distortion circuits to add subtle harmonic distortion and warmth.
+
+6. Exponential Functions
+Exponential functions are used to shape envelopes, modulations, and even waveshaping.
+
+Exponential envelope:
+
+𝑓
+(
+𝑥
+)
+=
+𝐴
+⋅
+(
+1
+−
+𝑒
+−
+𝑘
+𝑥
+)
+f(x)=A⋅(1−e 
+−kx
+ )
+Controls how the envelope or modulation rises or falls. Exponential curves give faster transitions at the start or end, making the sound more dynamic.
+Purpose: Exponential functions control the response of envelopes, making them snappier or smoother. They're used in the shaping of LFOs, ADSR envelopes, and other modulation sources.
+
+Application: In synth design, exponential envelopes create more natural-sounding dynamics. This is particularly useful in percussion, where fast attack and slow release are desired.
+
+7. Arctangent (atan)
+The arctangent function is another way to create soft clipping, similar to tanh.
+
+Arctangent function:
+
+𝑓
+(
+𝑥
+)
+=
+arctan
+⁡
+(
+𝑥
+)
+f(x)=arctan(x)
+Like tanh, atan(x) also compresses high values but has a slightly different shape. It’s commonly used in soft clipping circuits in guitar pedals and synths.
+Purpose: To introduce controlled distortion without hard clipping, providing smooth transitions from quiet to loud signals.
+
+Application: It’s used in distortion effects, amp simulations, and waveshaping modules for adding warmth and character to synth sounds.
+
+8. Logarithmic Functions
+Logarithmic functions are used in audio to scale signals, especially for perceived loudness. Human hearing is logarithmic, so this function is used to control volume or frequency response in a more musically intuitive way.
+
+Logarithmic scaling:
+
+𝑓
+(
+𝑥
+)
+=
+log
+⁡
+(
+𝑥
++
+1
+)
+f(x)=log(x+1)
+It’s often used to scale signals so that changes in values are perceived as linear to the human ear.
+Purpose: Logarithmic functions make volume changes or frequency modulations more perceptible to human hearing.
+
+Application: This is often used in LFOs, filters, or amplitude envelopes to provide smooth, perceptually even transitions.
+
+9. Power Functions
+Power functions (like squaring or cubing a signal) introduce non-linearities and can be used to create specific types of distortion or waveshaping.
+
+Example: Squaring a signal:
+
+𝑓(𝑥)=𝑥^2
+
+f(x)=x^2
+
+ 
+This process creates a form of rectification that results in even harmonics, producing a smoother sound compared to odd-harmonic distortions.
+Purpose: Power functions add complexity to waveforms and can be used to manipulate sound in interesting ways, such as creating octave doubling effects or other harmonically rich textures.
+
+Application: You can use power functions in waveshapers to generate harmonics and manipulate the harmonic content of a signal.
+
+10. Custom Piecewise Functions
+Sometimes, synth designers use custom piecewise functions to create unique waveshaping or distortion effects. These functions are designed to apply different transformations based on specific ranges of the input signal.
+
+Example of a piecewise function:
+
+𝑓(𝑥)={if 𝑥 < 0, 𝑥^2
+      if 0 ≤ 𝑥 ≤ 1, 𝑥
+      if 𝑥 > 1, 1
+
+f(x)= {if x<0, x^2
+​      {if 0≤x≤1, x
+      {if x>1, 1
+​
+  
+This could be used to smooth the negative half of a waveform while clipping the positive half, creating a unique distortion effect.
+Purpose: Custom functions allow you to finely tune the shaping of a waveform
+
+
+
+
+what other functions are used for similar purposes in synthesis fren?
+ChatGPT said:
+ChatGPT
+There are several other functions and techniques used for waveshaping, distortion, clipping, and non-linear effects in synthesizer design that are similar to tanh in the way they introduce harmonics, alter waveforms, or provide saturation. Each of these functions has a unique impact on the sound. Let’s explore some of these functions and how they are used in synthesis:
+
+1. Sigmoid Function
+The sigmoid function is quite similar to tanh in that it provides a smooth, non-linear curve that softly compresses or clips signals.
+Its mathematical form is:
+sigmoid(𝑥)=1+𝑒1−𝑥
+
+sigmoid(x)=1+e1-x
+​
+
+Like tanh, it limits the output to a specific range (in this case, between 0 and 1). It is often used in soft clipping and distortion effects.
+Application: It can be used for shaping signals in a way that rounds off extreme values, adding warmth without harsh distortion. It’s commonly used in soft-saturation stages.
+Sigmoid in Code (Python Example):
+python
+Copy code
+import numpy as np
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+# Apply sigmoid function to a signal
+signal = np.array([0.1, 0.5, 1.0, -1.0, -0.5])
+shaped_signal = sigmoid(signal)
+2. Hard Clipping
+Hard clipping is a simple, abrupt form of distortion where any value above or below a certain threshold is "clipped" off. Unlike tanh or sigmoid, hard clipping produces harsh, digital-sounding distortion by creating sharp edges in the waveform.
+Application: This is commonly used in more aggressive distortion effects or as a deliberate creative tool in certain genres like hard techno or industrial music. It introduces both odd and even harmonics, creating a bright, buzzy sound.
+Hard Clipping in Code (Python Example):
+python
+Copy code
+def hard_clip(x, threshold=1.0):
+    return np.clip(x, -threshold, threshold)
+
+# Apply hard clipping to a signal
+clipped_signal = hard_clip(signal)
+3. Rectifier
+A rectifier is a simple function that flips the negative part of a waveform to positive, resulting in a purely positive waveform. This introduces even harmonics (2nd harmonic, 4th harmonic, etc.), giving the sound a unique harmonic richness.
+Application: It can be used in distortion or waveshaping effects to produce more harmonic content in the sound, especially for adding brightness or "fuzz" to a tone.
+Full-Wave Rectifier in Code (Python Example):
+python
+Copy code
+def full_wave_rectifier(x):
+    return np.abs(x)
+
+# Apply full-wave rectification to a signal
+rectified_signal = full_wave_rectifier(signal)
+Half-Wave Rectifier (only affects negative values):
+
+python
+Copy code
+def half_wave_rectifier(x):
+    return np.maximum(x, 0)
+
+# Apply half-wave rectification to a signal
+rectified_signal = half_wave_rectifier(signal)
+4. Exponentiation
+By raising the input signal to a power, you can introduce non-linearity in a way that emphasizes certain parts of the waveform, such as enhancing low amplitudes or accentuating higher peaks.
+Application: Exponentiation can be used in waveshaping for non-linear distortion or to modify the dynamics of a signal.
+Exponentiation in Code (Python Example):
+python
+Copy code
+def exponentiate(x, exponent=2):
+    return np.sign(x) * np.abs(x)**exponent
+
+# Apply exponentiation to a signal
+shaped_signal = exponentiate(signal, 3)  # Cubic waveshaping
+Cubic Waveshaping: If you use exponent = 3, this creates a soft-clipping effect similar to tanh but with a different harmonic structure. It can be more subtle or more aggressive depending on the exponent used.
+5. Polynomial Waveshaping
+Polynomial functions are often used in waveshaping to transform a simple waveform into a more complex one. By using a polynomial of varying degrees, you can create all sorts of harmonic content.
+Application: In synthesis, polynomial shaping is used to design custom waveshaping effects, adding overtones in a way that can be controlled by adjusting the coefficients of the polynomial.
+Polynomial Waveshaping in Code (Python Example):
+python
+Copy code
+def polynomial_waveshaper(x, a=1, b=0, c=0):
+    # a*x + b*x^2 + c*x^3 gives a third-order polynomial shaping
+    return a * x + b * x**2 + c * x**3
+
+# Apply polynomial shaping to a signal
+shaped_signal = polynomial_waveshaper(signal, a=1, b=0.5, c=0.1)
+By adjusting the polynomial terms, you can create a wide variety of effects, from subtle harmonic enhancement to aggressive distortion.
+
+6. ArcTan (Inverse Tangent)
+The arctan function is similar to tanh, providing smooth non-linearity that softly clips the signal. It’s often used in waveshaping and soft saturation because of its ability to compress the signal smoothly as it approaches extreme values.
+Application: Like tanh, arctan is used in distortion circuits and non-linear filters to provide warmth and smooth clipping.
+ArcTan in Code (Python Example):
+python
+Copy code
+def arctan_shaper(x):
+    return np.arctan(x)
+
+# Apply arctan waveshaping to a signal
+shaped_signal = arctan_shaper(signal)
+7. Sinusoidal Waveshaping
+Using the sine function itself to shape a waveform is another option for creating subtle harmonic distortion. Applying sin(x) to a signal will introduce harmonics, but in a softer, less aggressive manner than functions like hard clipping.
+Application: This technique is sometimes used in non-linear waveshaping to create more natural-sounding distortions or tonal adjustments.
+Sinusoidal Waveshaping in Code (Python Example):
+python
+Copy code
+def sinusoidal_waveshaper(x):
+    return np.sin(x)
+
+# Apply sinusoidal shaping to a signal
+shaped_signal = sinusoidal_waveshaper(signal)
+This can create gentle harmonic distortion or change the character of the waveform in a more subtle way.
+
+8. Logarithmic Function
+The logarithmic function is used to compress the dynamic range of a signal, often to achieve dynamic compression or to create a soft knee in compressors.
+Application: The log(x) function is used in compressors, where the signal is gradually reduced in amplitude as it gets louder, making it useful for dynamic range control.
+Logarithmic Compression in Code (Python Example):
+python
+Copy code
+def log_compression(x):
+    return np.log(1 + np.abs(x)) * np.sign(x)
+
+# Apply logarithmic compression to a signal
+compressed_signal = log_compression(signal)
+9. Wavefolding
+Wavefolding is a synthesis technique where a waveform is "folded" back on itself when it exceeds a certain threshold. This creates a highly complex waveform with rich harmonics. It’s often used in west-coast synthesis techniques (e.g., Buchla-style synthesizers).
+Application: Wavefolding is used in experimental and modular synthesizers to create extreme timbral variations from simple waveforms.
+Wavefolding in Code (Python Example):
+python
+Copy code
+def wavefolder(x, fold_threshold=0.5):
+    return np.where(np.abs(x) < fold_threshold, x, 2 * fold_threshold - np.abs(x))
+
+# Apply wavefolding to a signal
+folded_signal = wavefolder(signal)
+Summary of Functions in Synthesis:
+
+- tanh, sinh, cosh: 
+- Sigmoid: Smooth soft-clipping, often used for saturation and waveshaping.
+- Hard Clipping: Harsh clipping for aggressive distortion, introduces odd and even harmonics.
+- Rectification: Converts negative values to positive, adding even harmonics.
+- Exponentiation: Emphasizes certain parts of the waveform, creating non-linear dynamics.
+- Polynomial Waveshaping: Complex harmonic shaping by using polynomial equations.
+- ArcTan: Similar to tanh, used for soft distortion and non-linear effects.
+- Sinusoidal Waveshaping: Soft waveshaping to create subtle harmonic distortion.
+- Logarithmic Compression: Used in dynamic compression, smooths out high-amplitude signals.
+- Wavefolding: Experimental technique for extreme harmonic richness, often in modular synthesis.
+- ReLU: 
+- Softsine: 
+- Power Function: 
+- Absolute Value:
+- Saturation:
+- Custom Piecewise: 
+
+
+These functions give you a wide range of possibilities in synthesizer design, from subtle warmth and distortion to extreme harmonic shaping. Each can be applied in different stages of the synthesis process—whether in oscillators, filters, distortion units, or modulation effects.
+
+Let me know if you’d like to explore a specific one further.
+
+
+
+- tanh, sinh, cosh: tanh(x)= e^x - e^-x / e^x + e^-x, sinh(x)=e^x − e^−x^2, cosh(x)=e^x + e^−x^2
+- Sigmoid: sigmoid(x)=1+e^1−x
+- Hard Clipping: f(x)={if x < −1, -1
+       		      {if −1 ≤ x ≤ 1, x
+       		      {if x > 1, 1
+- Rectification: half wave; f(x)={if x>0, x
+     			         {if x≤0, 0
+		 full wave; f(x)=∣x∣
+- Exponentiation: f(x)=(sin(|x|))*((|x|)^exp);
+- Polynomial Waveshaping: f(x)=a0​+a1x+a2x2+3x3+⋯
+- ArcTan: atan(x)=arctan(x)
+- Sinusoidal Waveshaping: f(x)=sin(x)
+- Logarithmic Compression: f(x)=log(1+(|x|))*sin|(|x|)
+- Wavefolding: f(x)={if ∣x∣<T, x,
+      		    {if T≤x<2T, 2T−x,
+​      		    {…
+- ReLU: ReLU(x)=max(0,x)
+- Softsine: softsign(x)=x1+∣x∣
+- Power Function: f(x)=x^2
+- Absolute Value: f(x)=|x|
+- Saturation: f(x)={for small values of x, x−3x^3, 
+     		   {for large values of x, clipping at max value
+- Custom Piecewise: f(x)={if x < 0, x^2
+​      			 {if 0 ≤ x ≤ 1, x
+      			 {if x > 1, 1
+​
+

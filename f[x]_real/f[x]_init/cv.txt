@@ -1,0 +1,375 @@
+what relevance does this lot hold for us fren and can we implement it:
+Ranges, polarity, offsets and attenuverters
+This section explains the interactions between the attenuverter and the main knob for a synthesis parameter, and how they impact the minimum and maximum value this parameter will take, when modulated.
+
+Polarity
+LFOs are sometimes unipolar (say they'll wiggle between 0V and 10V) or bipolar (they wiggle between -5V and +5V). How to know if your LFO is bipolar or unipolar? It's usually explained in its manual, but you can also check the colors on its output LEDs, or when you patch it through a module like Shades!
+
+You'll also see that sometimes, LFO modules have a lower range (say unipolar between 0V and 5V).
+
+Main knob: offset
+The main knob (eg: DAMPING on Rings) controls what is called an offset (between 0 and 5V). Think of it as a "base setting", ie, what setting you'd get with a flat (null) modulation signal.
+
+If your LFO is bipolar, the parameter will wiggle around this base setting. If your LFO is unipolar, it'll wiggle between this base setting and a value further CW.
+
+Attenuverter
+How wide will it wiggle around this base value? You decide with the attenuverter. In its central position, there's no wiggling. Turn the attenuverter further away from the central position and the wiggling amplitude increases, up to 1.5x the amplitude of the LFO (why 1.5x? Because some modulation sources can have a lower amplitude, so it's good to be able to amplify them). On the "+" side, the modulation keeps its polarity. On the "-" side the modulation's polarity is reverted.
+
+Example
+You have a ramp (sawtooth with an increasing slope) bipolar LFO going from -5V to +5V. If you want to sweep the parameter from its minimum value to maximum value, you need to set the knob to its central position (offset of 2.5V), and the attenuverter around 2 o'clock to get a gain of 0.5. When the LFO is at the minimum, the module will receive 2.5 + 0.5 x -5V = 0V (minimum position of the knob) ; when the LFO reaches its maximum, the module will receive 2.5 + 0.5 x 5V = 5V (maximum position of the knob).
+
+Now you have a unipolar LFO going from 0V to +8V, and you want to sweep the parameter from its maximum value to its medium value. You set the knob to its maximum value (offset of 5V), and the attenuverter around 11 o'clock to get a gain of -0.33. When the LFO is at the minimum, the module will receive 5 + -0.33 x 0 = 5V (maximum value of the knob). When the LFO Is at the maximum, the module will receive 5 - 0.33x8 = 2.5V (medium value of the knob).
+
+Clipping
+Last thing to keep in mind: the minimum value is mapped to 0V, the maximum value is mapped to 5V. It's easy to go below or above these values with some modulations and some knob configurations. Nothing bad will happen, the wiggling will just be constrained to remain within those bounds. For example, unipolar LFO going from 0V to +8V, knob at the minimum (0V), attenuverter to the maximum. The modulation will go from 0 + 1.5 x 0 = 0V (minimum position of the knob) to 0 + 1.5 x 8 = 12V. This means that for about 40% of the course of the LFO, we'll just stay at the maximum position of the knob.
+
+For accuracy's sake: on most digital modules, the math is done digitally
+
+Demo
+
+Green curve: LFO. You can adjust its minimum and maximum value with lmin and lmax.
+a: position of the attenuverter.
+k: position of the knob.
+Purple curve: how your parameter evolves, from minimum (0) to maximum (5).
+Hardware implementation
+Principle
+The main pot and attenuverters are read by the MCU's ADC – they do not offset or attenuate the CV in the analog domain.
+
+The CV input is scaled to the 0..3.3V range and read by the MCU's ADC. Typically, the bottom of the CV input range is mapped to 3.3V, and the top of the CV input range is mapped to 0V. This scaling is done with a rail to rail op-amp, in inverting configuration. In this configuration, the op-amp input is never directly exposed to the external voltage.
+
+The MCP600x is a good candidate for this task: it’s super cheap and designed for low supply voltages, like MCUs. No need to use anything fancier - the MCU’s ADC will be the weakest link in terms of noise and bandwidth anyway.
+
+Advantages
+100k input impedance guaranteed.
+The V- input of the op-amp is a summing point - you can attach there as many CV inputs or pots if you want to offer multiple CV inputs.
+The circuit can be easily adjusted for various CV input ranges (as opposed to a lazier design in which the CV is clamped and directly connected to the MCU's ADC input).
+The capacitor in the feedback path of the op-amp acts as a 1-pole low-pass filter which removes some of the high frequencies in the CV signal - providing cleaner readouts.
+The output of the op-amp works as a very low impedance source for the ADC. The successive approximation ADC found in MCUs does not like being driven from sources with high ouptut impedances!
+It makes factory testing easier, since one can test the pot, attenuverter, and CV input separately.
+From the perspective of the user, hardware attenuverters like those used in Braids make it more difficult to adjust subtle modulation amounts, and since they work by crossfading the original signal and the signal inverted through an op-amp, the circuit cannot entirely cancel very fast edges. There is also the issue of ADC resolution: if your ADC has a resolution of 10-bit and if your hardware attenuverter attenuates the signal by a factor of 16, you’ll capture the signal with only 6-bits of resolution. Whereas doing the attenuation in software preserves resolution, especially in the recent modules which all use 32-bit floating point numbers internally.
+Individually acquiring the main potentiometer and attenuverter position gives freedom to tweak the response curve of these pots, for example to add “virtual notches” to them - a plateau near 12 o'clock for the attenuverter, or an enlarged spot around middle C for a pitch control.
+Design of the negative voltage reference
+As a case study, let's consider Grids
+
+The voltage reference receives current through a shunt resistor Rshunt, here R8.
+
+The -5V voltage it provides goes to six 100k resistors to (virtual) ground, that is to say, ILoad = 5 x 6 / 100k = 0.3mA. Or if you want to think in terms of RLoad, this is equivalent to six 100k resistors in parallel, that is to say 16.7k.
+
+Where does Iload come from?
+
+Assuming the -12V rail is stable, we have (12 - 5) / 10k = 0.7mA flowing through the shunt resistor, into the reference.
+
+Thus, 0.7 - 0.3 = 0.4mA will be sunk by the reference. And 0.4e-3 x 5 = 2mW of heat will be dissipated by the reference which is way below the maximum rated dissipation.
+
+One can think of it this way: the reference takes an excess of current, supply some of it to the load, and the rest is sunk by it. It is important not to starve the device (providing through Rshunt less current than the load will take) - but the opposite (providing through Rshunt more current than the load will take) is possible, as long as the dissipated heat stays reasonable. And that's kind of the point of using a reference!
+
+One might wonder why 0.4mA are "wasted" like that. To reduce the waste, I could have used a lower Rshunt like 22k, which would have given 0.32mA flowing through Rs, 0.3mA through the load and only 0.02mA sunk by the reference. But then, what if the PSU regulation is bad and it supplies only -11.8V? We would starve the reference!
+
+So I usually allow 20 to 30% more current. And I really don't see the point of picking a specific resistor value just for this one resistor. So if I need 15k and there's nowhere else in the circuit where this value is used... then I go for 10k, which is very often used somewhere else. Or sometimes I put two resistors in parallel to get the value I need. The module will be wasting a few extra tenths of mA, but we don't have the extra cost and wastage of loading another resistor reel in the pick and place when making the boards.
+
+In the schematics of more recent modules, the voltage reference is annotated with the actual current delivered to the load, and how much it receives through the shunt resistor.
+
+Software implementation
+Normalization probe
+Starting from Rings and Warps, modules often try to detect whether their CV or trigger inputs are patched or not.
+
+This is achieved by sending a normalization probe signal, pseudo-random noise, generated at the same rate as the ADC sampling.
+
+If ADC reads match the pseudo-random noise (no more than 2 mismatches in 32 consecutive reads), we know that no patch cable is inserted in the corresponding input.
+
+Example from Plaits
+
+ADC input filtering
+Most of the time, a one-pole IIR filter on the ADC readout.
+
+Boxcar filtering is doing a better job at eliminating impulsive outliers (common on the F4 ADCs), and a worse job at eliminating high frequencies. In terms of CPU it's slightly more inefficient than a one-pole filter, and it uses RAM (a fast implementation would work like this: pick the last sample in a delay line and remove it from the running sum, add the new sample to the sum and shove it in the delay line).
+
+I also experimented with median filtering on the F4 (along with other adaptative schemes - for example adjusting the filter coefficient depending on the error between the current value and the readout, to allow faster tracking of fast changes), and was surprised that none of them worked much better than 2-pole filtering, which I'm now using on F4 projects.
+
+As for backlash/thresholding, I'm trying to stay away from it as much as possible. Any implementation (including the one mentioned in the thread above) has the downside that it might make the maximum/minimum value of the pot impossible to reach. At the very least, you have to scale the value by (1.0 + 2 * threshold) and offset it by -threshold, then clamp to [0, 1.0], assuming that's the range of your parameter, to make sure turning the pot to the minimum/maximum allows you to always reach the minimum and maximum settings. Note that pots already have mechanical backlash, and that their response curve already have a flat zone at the minimum and maximum.?
+ChatGPT
+
+Thought for 11 seconds
+
+Certainly! The text you've provided discusses the concepts of ranges, polarity, offsets, and attenuverters in the context of modular synthesizer modules—specifically how they affect the modulation of synthesis parameters. It delves into both the hardware and software implementations of these concepts, providing insights into designing modules that handle control voltage (CV) inputs and modulation effectively.
+
+Let's break down the key points of the text, explain their relevance to your project, and discuss how you can implement these concepts in your module design.
+
+Summary and Explanation
+1. Understanding Polarity, Offsets, and Attenuverters
+Polarity
+Unipolar Signals: Signals that range from 0V to a positive voltage (e.g., 0V to +5V or +10V).
+Bipolar Signals: Signals that range from a negative voltage to a positive voltage (e.g., -5V to +5V).
+Relevance: Knowing whether an LFO or modulation source is unipolar or bipolar is crucial because it affects how the modulation interacts with the parameter you're controlling.
+
+Main Knob: Offset
+The main knob on a module sets a base value or offset for a parameter.
+This base setting determines the starting point from which modulation will occur when a modulation source is applied.
+Relevance: The offset allows you to set the default state of a parameter when no modulation is present.
+
+Attenuverter
+An attenuverter is a control that both attenuates (controls the amount) and inverts (reverses the polarity) of a modulation signal.
+In the center position, the attenuverter outputs zero modulation.
+Turning it clockwise increases the modulation amount with the same polarity.
+Turning it counter-clockwise increases the modulation amount but inverts the polarity.
+Relevance: The attenuverter allows precise control over how much and in which direction (positive or negative) the modulation affects the parameter.
+
+Interaction Between Offset, Attenuverter, and Modulation
+The final parameter value is determined by combining the offset (main knob setting), the modulation signal, and the attenuverter setting.
+Equation:
+Parameter Value
+=
+Offset
++
+(
+Attenuverter Gain
+×
+Modulation Signal
+)
+Parameter Value=Offset+(Attenuverter Gain×Modulation Signal)
+Example 1: Using a bipolar LFO (-5V to +5V) to sweep a parameter from minimum to maximum.
+
+Offset (Main Knob): Set to the middle position (2.5V in a 0V to 5V range).
+Attenuverter Gain: Set to 0.5.
+Result:
+When LFO is at -5V: 
+2.5
+𝑉
++
+0.5
+×
+(
+−
+5
+𝑉
+)
+=
+0
+𝑉
+2.5V+0.5×(−5V)=0V (minimum).
+When LFO is at +5V: 
+2.5
+𝑉
++
+0.5
+×
+5
+𝑉
+=
+5
+𝑉
+2.5V+0.5×5V=5V (maximum).
+Example 2: Using a unipolar LFO (0V to +8V) to sweep a parameter from maximum to medium.
+
+Offset (Main Knob): Set to maximum (5V).
+Attenuverter Gain: Set to -0.33.
+Result:
+When LFO is at 0V: 
+5
+𝑉
++
+(
+−
+0.33
+)
+×
+0
+𝑉
+=
+5
+𝑉
+5V+(−0.33)×0V=5V (maximum).
+When LFO is at +8V: 
+5
+𝑉
++
+(
+−
+0.33
+)
+×
+8
+𝑉
+=
+2.36
+𝑉
+5V+(−0.33)×8V=2.36V (medium).
+Clipping
+When the calculated parameter value exceeds the module's range (e.g., goes below 0V or above 5V), it gets clipped to stay within acceptable limits.
+This means that extreme modulation settings may cause the parameter to stay at its minimum or maximum value for a portion of the modulation signal's cycle.
+2. Hardware Implementation
+Principle
+Digital Control: The main potentiometer (knob) and the attenuverter are read by the microcontroller's Analog-to-Digital Converter (ADC).
+Analog CV Input Scaling:
+The external CV input is scaled and shifted to match the ADC's input range (typically 0V to 3.3V or 0V to 5V).
+This scaling is done using a rail-to-rail op-amp in an inverting configuration.
+Circuit Details:
+
+Op-Amp Configuration:
+
+The op-amp is set up so that the external CV does not directly connect to the microcontroller, protecting it from voltage levels outside its operating range.
+The op-amp also acts as a buffer, providing a low-impedance source for the ADC.
+Op-Amp Choice:
+
+MCP600x series op-amps are recommended because they operate at low supply voltages suitable for microcontrollers and are cost-effective.
+Advantages of This Approach
+Consistent Input Impedance: High input impedance (e.g., 100kΩ), which is standard for Eurorack modules.
+Flexible Summing Point: Multiple CV inputs and potentiometers can be summed at the op-amp's negative input.
+Adjustable Input Ranges: The scaling circuit can be easily modified for different voltage ranges.
+Filtering: A capacitor in the feedback path acts as a low-pass filter, reducing high-frequency noise.
+Low Impedance Source: Provides a suitable signal for the ADC, which prefers low-impedance inputs.
+Ease of Testing: Separating the pot, attenuverter, and CV input in testing simplifies troubleshooting.
+Digital Processing: Attenuation and offset are handled digitally, preserving signal resolution and allowing for more complex response curves.
+3. Design of the Negative Voltage Reference
+Purpose: Some op-amp configurations require a negative voltage reference (e.g., -5V) to handle bipolar signals.
+Implementation:
+A voltage reference is created using a resistor (shunt resistor) and a precision voltage reference IC.
+The design must ensure that the voltage reference can supply the necessary current to the load (e.g., multiple resistors connected to virtual ground) without being starved.
+Example Calculation:
+Current through Shunt Resistor (Rshunt): Calculated based on the voltage difference and resistor value.
+Load Current: Determined by the resistors connected to the voltage reference.
+Power Dissipation: Ensured to be within the safe limits of the voltage reference IC.
+4. Software Implementation
+Normalization Detection
+Objective: Detect whether a CV input is patched (cable inserted) or not.
+Method:
+Send a pseudo-random noise signal (normalization probe) into the CV input path.
+If the ADC readings match the pseudo-random signal (within acceptable mismatches), the input is considered unpatched.
+If the readings deviate significantly, the input is considered patched.
+Benefit: Allows the module to behave differently when no CV is connected, such as using default modulation sources or disabling modulation.
+
+ADC Input Filtering
+Purpose: Reduce noise and unwanted fluctuations in the ADC readings of pots and CV inputs.
+Techniques:
+One-Pole IIR Filter: Simple filter that smooths the signal.
+Two-Pole Filtering: Provides better smoothing and noise reduction.
+Boxcar (Moving Average) Filter: Averages a set number of samples but requires more computational resources and memory.
+Median Filtering: Attempts to remove outliers but may not perform significantly better than IIR filters in this context.
+Considerations:
+
+Backlash/Thresholding: Avoided because it can make it impossible to reach the exact minimum or maximum parameter values with the knobs.
+Resolution Preservation: Digital attenuation and offset ensure that signal resolution is maintained, especially when using high-resolution ADCs and processing internally with 32-bit floating-point numbers.
+Relevance to Your Project
+1. Applying Offsets and Attenuverters
+Implementing digital attenuverters and offsets allows for flexible modulation control in your module.
+
+By reading the main knob (offset) and attenuverter positions via the ADC, you can digitally combine them with incoming CV signals.
+
+This approach gives you the ability to:
+
+Adjust response curves (e.g., linear, exponential).
+Introduce features like virtual notches or dead zones.
+Ensure full parameter ranges are accessible.
+2. Hardware Design
+Op-Amp Scaling Circuits:
+
+Use op-amps (e.g., MCP600x) to scale incoming CV signals to the microcontroller's ADC range.
+Protects the microcontroller from voltage levels outside its tolerance.
+Provides consistent input impedance and filtering.
+Negative Voltage Reference:
+
+Necessary if your op-amp configuration requires a negative supply or reference.
+Design the voltage reference circuit to supply adequate current without exceeding power dissipation limits.
+3. Software Techniques
+Normalization Detection:
+
+Implement the normalization probe to detect if CV inputs are patched.
+Allows the module to provide default behaviors when inputs are unpatched.
+ADC Filtering:
+
+Use digital filters (e.g., one-pole or two-pole IIR filters) to smooth out readings from pots and CV inputs.
+Improves the stability of parameter adjustments and modulation.
+4. Advantages for Your Module
+Improved User Experience:
+
+Smooth and precise control over parameters.
+Predictable modulation behavior regardless of the modulation source's polarity or range.
+Enhanced Functionality:
+
+Ability to handle both unipolar and bipolar modulation sources seamlessly.
+Flexibility to implement complex modulation mappings in software.
+Simplified Calibration and Testing:
+
+Digital handling of signals simplifies calibration processes.
+Easier to diagnose issues with separate testing of pots, attenuverters, and CV inputs.
+Implementation Guidance
+Hardware Implementation Steps
+Design the CV Input Stage:
+
+Use an op-amp in inverting configuration to scale and shift the CV input voltage to match the ADC input range.
+Include a capacitor in the feedback loop for filtering.
+Select Appropriate Components:
+
+Choose op-amps that operate at your microcontroller's voltage levels.
+Ensure resistors are chosen to provide the correct scaling and input impedance.
+Implement Negative Voltage Reference (if needed):
+
+Calculate the required current and power dissipation.
+Use a precision voltage reference IC with a shunt resistor.
+Connect Pots and Attenuverters:
+
+Wire the main potentiometer and attenuverter to separate ADC inputs.
+Ensure proper voltage ranges and filtering.
+Software Implementation Steps
+Read ADC Values:
+
+Continuously read the values from the main knob and attenuverter.
+Read the scaled CV input.
+Implement Normalization Detection:
+
+Generate a pseudo-random noise sequence.
+Compare ADC readings to detect if inputs are patched.
+Apply Digital Filtering:
+
+Implement IIR filters to smooth ADC readings.
+Adjust filter coefficients as needed for responsiveness.
+Calculate Parameter Values:
+
+Use the equation:
+Parameter Value
+=
+Offset
++
+(
+Attenuverter Gain
+×
+Modulation Signal
+)
+Parameter Value=Offset+(Attenuverter Gain×Modulation Signal)
+Ensure the result is clamped within acceptable ranges.
+Handle Clipping and Limits:
+
+Implement logic to clip parameter values to their minimum and maximum.
+Provide visual feedback if necessary (e.g., LEDs indicating clipping).
+Optimize Performance:
+
+Ensure efficient code execution, especially in time-critical sections.
+Use appropriate data types (e.g., floating-point or fixed-point) based on microcontroller capabilities.
+Conclusion
+The concepts and implementation details described in the text are highly relevant to your project. By adopting these techniques, you can:
+
+Enhance the Modulation Capabilities of your module by providing users with intuitive and precise control over parameters.
+Improve Signal Integrity through proper hardware scaling and digital filtering.
+Increase Flexibility by handling modulation in software, allowing for future updates and feature additions.
+Next Steps
+Review and Design the CV Input Circuitry:
+
+Sketch out the op-amp configurations for your CV inputs.
+Calculate resistor values for scaling and input impedance.
+Prototype the Hardware:
+
+Build a test circuit to validate the scaling and filtering of CV inputs.
+Test with both unipolar and bipolar signals.
+Develop Firmware Modules:
+
+Write code to read ADC values and implement digital attenuverters and offsets.
+Implement normalization detection and digital filtering.
+Test and Iterate:
+
+Verify that parameter values respond correctly to knob positions and modulation signals.
+Adjust filter settings and response curves based on testing.
+Document Your Design:
+
+Keep detailed notes on hardware configurations and software algorithms.
+This will aid in debugging and future development.
+Feel free to ask if you need further clarification on any of these points or assistance with specific implementation details! Implementing these concepts will significantly enhance the functionality and user experience of your Eurorack module.

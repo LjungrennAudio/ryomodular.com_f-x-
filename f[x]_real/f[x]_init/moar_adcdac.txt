@@ -1,0 +1,227 @@
+is there anything of relevance for us in this, pls fren?:
+Marbles, Stages and Tides 2018 use an unusual technique for sending data to DAC816x digital to analog converters.
+
+Principle
+These converters have a standard SPI interface, but instead of using the SPI peripheral of the STM32F, the I2S interface is configured in such a way that the signals it generates can be interpreted as a valid signal by the DAC.
+
+The benefits are twofold:
+
+The timing is extremely accurate, since the I2S peripheral is sending an uninterrupted stream of data.
+There is no overhead associated with toggling the CS line, and individually sending each packet of 32 bits required to set an output.
+Example
+In this example, we see how to use I2S to write 8 channels of the DAC8168.
+
+Hardware connections:
+
+MCU I2S CK -> DAC SCK
+MCU I2S SD -> DAC MOSI
+MCU I2S WS -> DAC SS/!SYNC
+For a refresh rate of 48kHz, the I2S sample rate must be set to 48*8 = 384kHz. The data format must be set to 32-bit, PCM short. With these settings, the data from each L channel will be written to the converter's shift register. The right channel is not used: when its data is shifted out, the word select (WS, aka LR, aka LRCK, connected here to the SS pin of the DAC) is high, and the DAC will ignore the data.
+
+The buffer size must be set to a multiple of 8. For example, it can be set to 16 (which means 16 stereo frames must be provided at each call of the DMA IRQ handler).
+
+Thus, an ISR will be received 24k times per second, during which the data for the value of 2 samples for each of the 8 channels must be provided.
+
+The buffer must be filled with the following data.
+
+    Frame 0, L channel: channel 0 sample 0.
+    Frame 0, R channel: 0.
+    Frame 1, L channel: channel 1 sample 0.
+    Frame 1, R channel: 0.
+    ...
+    Frame 7, L channel: channel 7 sample 0.
+    Frame 7, R channel: 0.
+    Frame 8, L channel: channel 0 sample 1.
+    Frame 8, R channel: 0.
+    ...
+    Frame 15, L channel: channel 7 sample 1.
+    Frame 15, R channel: 0.
+For each channel/sample, the 32 bits consists in:
+
+12-bit of prefix/control/address with the command Write to Selected DAC Input Register and Update Respective DAC Register (0x3) and the channel number.
+14-bit of sample data, within the resolution of the DAC.
+2 bits of sample data, whose behavior is unspecified for a 14-bit DAC.
+4 feature bits left empty.
+
+
+Thus, the first 16 bits are 0x0300 | (channel << 4) | (sample >> 12) and the next 16 bits are sample << 4.
+
+Code
+Stages : STM32F37x + DAC8168
+Tides 2018 : STM32F37x + DAC8164
+Marbles : STM32F4xx + DAC8164
+ChatGPT
+
+Thought for 13 seconds
+
+Certainly! The text you've provided describes a technique used by Mutable Instruments in their modules (Marbles, Stages, and Tides 2018) to communicate with DAC816x digital-to-analog converters (DACs) using the I²S interface instead of the standard SPI interface. This method offers precise timing and efficient data transmission, which can be highly beneficial for your Eurorack module design.
+
+Given your project's requirements—using an ARM microcontroller to process audio and CV signals with multiple outputs—this technique is relevant and can be implemented to enhance the performance of your module. Let's delve into how this method works, its advantages, and how you can adapt it for your project.
+
+Understanding the Technique
+Standard Communication with DACs
+SPI Interface: DAC816x devices typically use the SPI protocol for communication, which involves sending discrete data packets to update the DAC outputs.
+Challenges with SPI:
+Overhead: Each SPI transaction requires toggling the Chip Select (CS) line and managing individual data packets.
+Timing Variability: The need to initiate each transaction can introduce latency and make timing less consistent, which isn't ideal for audio applications.
+Using I²S Interface to Communicate with SPI DACs
+I²S Interface: Designed for continuous audio data streaming between devices.
+Innovative Approach: By configuring the I²S peripheral to mimic the SPI communication signals, you can send data to the DAC816x in a way that the DAC interprets correctly.
+Hardware Connections:
+MCU I²S CK (Clock) → DAC SCK (Serial Clock)
+MCU I²S SD (Serial Data) → DAC MOSI (Master Out Slave In)
+MCU I²S WS (Word Select) → DAC SS/!SYNC (Chip Select)
+Benefits:
+Precise Timing: The I²S interface sends an uninterrupted stream of data, ensuring that DAC updates occur at regular, precise intervals.
+Reduced Overhead: Eliminates the need to manually toggle the CS line and reduces CPU load, allowing for more efficient data transmission.
+How It Works
+Setting Up the I²S Interface
+Sample Rate:
+Determine the desired refresh rate for the DAC outputs (e.g., 48 kHz).
+Multiply by the number of DAC channels (e.g., 8 channels) to get the I²S sample rate (e.g., 48 kHz × 8 = 384 kHz).
+Data Format:
+Configure the I²S interface for 32-bit data words.
+Use PCM short format (standard for audio data).
+Data Transmission
+Frames and Channels:
+I²S transmits data in frames, each containing a left (L) and right (R) channel.
+Left Channel Data: Contains the command and data for a DAC channel.
+Right Channel Data: Set to zero; the DAC ignores this data when the WS line is high.
+Word Select (WS) Line:
+Acts as the Chip Select (CS) signal for the DAC.
+When WS is low, the DAC accepts data on the left channel.
+When WS is high, the DAC ignores data (right channel in I²S).
+Buffer Management
+Buffer Size:
+Must be a multiple of the number of DAC channels.
+Example: For 8 channels and 2 samples per channel per interrupt, use a buffer size of 16 frames.
+Data Arrangement:
+Frame 0, Left Channel: Data for DAC channel 0, sample 0.
+Frame 0, Right Channel: 0 (ignored by DAC).
+Frame 1, Left Channel: Data for DAC channel 1, sample 0.
+Frame 1, Right Channel: 0.
+Continue this pattern for all channels and samples.
+Data Format for Each 32-bit Word
+Structure:
+First 16 bits:
+12 bits: Command and address (e.g., 0x3 for "Write and Update" command) and channel number.
+4 bits: Upper bits of the sample data.
+Second 16 bits:
+14 bits: Lower bits of the sample data.
+2 bits: Unspecified or padding bits.
+Example:
+First 16 bits: 0x0300 | (channel << 4) | (sample >> 12)
+Second 16 bits: (sample << 4)
+Interrupt Handling
+DMA Interrupts:
+Use Direct Memory Access (DMA) to transfer data from memory to the I²S peripheral.
+An Interrupt Service Routine (ISR) is triggered when the DMA completes transferring half or all of the buffer.
+ISR Frequency: For 2 samples per channel and 8 channels at 48 kHz, ISR occurs at 24 kHz.
+Relevance to Your Project
+Benefits for Your Module
+High Timing Precision:
+Ensures that the DAC outputs are updated at consistent intervals, critical for audio quality and accurate CV outputs.
+Reduced CPU Load:
+Offloads data transmission to the I²S peripheral and DMA controller.
+Frees up the microcontroller to focus on signal processing and other tasks.
+Efficient Use of Peripherals:
+Leverages the I²S interface, which might otherwise be unused.
+Allows for handling multiple DAC channels without additional SPI peripherals.
+Applicability
+Microcontroller Requirements:
+Must have an I²S interface capable of the required configurations.
+Needs to support DMA for efficient data transfer.
+DAC Compatibility:
+The DAC must be able to interpret the I²S signals correctly when connected as described.
+DAC816x series DACs are proven to work with this method.
+Application Suitability:
+Ideal for applications requiring precise timing and multiple DAC outputs, such as processing audio and CV signals in a Eurorack module.
+Implementing the Technique
+Hardware Setup
+Connect the I²S Interface to the DAC:
+I²S CK → DAC SCK
+I²S SD → DAC MOSI
+I²S WS → DAC CS/!SYNC
+Ensure Voltage Level Compatibility:
+Both the microcontroller and DAC should operate at compatible logic levels (e.g., 3.3V).
+Use level shifters if necessary.
+Software Configuration
+Configure I²S Peripheral:
+Set the sample rate to Number of Channels × Refresh Rate.
+Use 32-bit data words in PCM short format.
+Set Up DMA Transfers:
+Configure DMA to automatically transfer data from memory to the I²S peripheral.
+Set up interrupts to trigger when half or all of the buffer has been transferred.
+Prepare Data Buffers:
+Organize the data in the buffer as per the required frame and channel arrangement.
+Ensure that the command and data bits are correctly formatted.
+Implement ISR Logic:
+In the ISR, update the buffer with the next set of data for the DAC channels.
+Maintain timing by ensuring buffer updates occur before the next DMA transfer begins.
+Data Formatting Details
+Command Bits:
+Use the "Write to Selected DAC Input Register and Update Respective DAC Register" command (0x3).
+Include the channel number in the address bits.
+Sample Data:
+For a 14-bit DAC:
+Use 14 bits for the sample data.
+The remaining bits can be used as padding or left unused.
+Advantages Over Standard SPI
+Continuous Data Stream: The I²S interface continuously sends data, which is beneficial for audio applications requiring regular updates.
+Elimination of CS Toggling: Removes the overhead of manually controlling the CS line for each SPI transaction.
+Improved Efficiency: Reduces CPU overhead by utilizing DMA and hardware peripherals for data transmission.
+Considerations and Potential Challenges
+Microcontroller Capability:
+Confirm that your ARM microcontroller's I²S peripheral supports the necessary configurations.
+Complexity:
+Setting up the I²S interface and DMA transfers is more complex than standard SPI communication.
+Requires careful attention to data formatting and timing.
+DAC Compatibility:
+Ensure that the DAC can interpret the I²S signals as valid SPI communication.
+Debugging:
+Continuous data streams can make debugging more challenging.
+Use oscilloscopes or logic analyzers to verify signal integrity.
+Alternative Approaches
+If implementing this technique isn't feasible due to hardware limitations or complexity, consider:
+
+Using Standard SPI with DMA:
+Utilize the SPI peripheral with DMA transfers to reduce CPU load.
+Manually manage CS line toggling.
+Multiple SPI Buses:
+If available, use separate SPI peripherals for different DACs to distribute the load.
+Dedicated Audio DACs with I²S Interface:
+Use DACs designed for audio applications that natively support I²S communication.
+Next Steps
+Assess Your Microcontroller's Capabilities:
+Verify I²S peripheral features and DMA support.
+Ensure adequate processing power for ISR handling.
+Choose a Compatible DAC:
+DAC8164 (4-channel) or DAC8168 (8-channel) are suitable options.
+Confirm that the DAC meets your resolution and performance requirements.
+Plan Your Hardware Design:
+Draw schematics showing the connections between the microcontroller and DAC.
+Include any necessary voltage level translators.
+Develop Firmware:
+Configure the I²S peripheral and DMA controller.
+Write code to format data correctly and manage buffer updates.
+Test and Validate:
+Use test signals to verify that the DAC outputs are updating accurately.
+Check for any timing issues or data corruption.
+Conclusion
+The technique of using the I²S interface to communicate with SPI DACs is innovative and offers significant benefits for audio and CV signal processing in modular synthesizer modules. By leveraging this method, you can achieve:
+
+High Timing Accuracy: Crucial for maintaining audio quality and precise CV outputs.
+Efficient Resource Utilization: Offloads communication tasks to hardware peripherals, freeing up CPU resources.
+Scalability: Easily manage multiple DAC channels without increasing complexity.
+Feel free to reach out if you need further assistance with implementing this technique or have specific questions about adapting it to your module design!
+
+Additional Resources:
+
+Datasheets:
+DAC816x Series Datasheets: Detailed information on command formats and timing requirements.
+Microcontroller Documentation: Information on configuring the I²S peripheral and DMA.
+Open-Source Code:
+Mutable Instruments' GitHub repositories for Stages, Tides 2018, and Marbles provide real-world examples.
+Community Support:
+Forums and communities focused on Eurorack modules and embedded systems can offer insights and advice.
+By carefully considering the benefits and implementation details, you can decide whether this technique is suitable for your project and proceed accordingly.
